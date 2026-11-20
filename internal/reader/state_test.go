@@ -89,6 +89,28 @@ func TestUnicodePageBoundary(t *testing.T) {
 
 type zeroMeasure struct{}
 
+type countedMeasure struct{ calls int }
+
+func (m *countedMeasure) Fit(text string, l Layout) (int, error) {
+	m.calls++
+	n := len([]rune(text))
+	if n > 5 {
+		n = 5
+	}
+	return n, nil
+}
+func TestPreviousOnLongChapterIsBounded(t *testing.T) {
+	m := &countedMeasure{}
+	b := book.Book{Chapters: []book.Chapter{{ID: "c", Text: strings.Repeat("甲", 100000)}}}
+	s, _ := New(b, book.Position{ChapterID: "c", Offset: 90000}, m)
+	if e := s.Previous(Layout{Width: 100, Height: 100, FontSize: 16}); e != nil {
+		t.Fatal(e)
+	}
+	if s.Position().Offset != 89995 || m.calls > 40 {
+		t.Fatalf("position %v, measurement calls %d", s.Position(), m.calls)
+	}
+}
+
 func TestPreviousAfterSwitchingLayoutUsesCurrentAnchor(t *testing.T) {
 	s, _ := New(testBook(), book.Position{}, fixedMeasure{5})
 	s.Next(Layout{Width: 5})

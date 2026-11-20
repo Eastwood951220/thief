@@ -5,6 +5,7 @@ import (
 	"golang.org/x/net/html"
 	"strings"
 	"thief/internal/book"
+	"unicode"
 )
 
 func extractEPUBText(raw []byte, toc map[string]string) ([]book.Chapter, error) {
@@ -16,9 +17,11 @@ func extractEPUBText(raw []byte, toc map[string]string) ([]book.Chapter, error) 
 	current := book.Chapter{Title: toc[""]}
 	var paras []string
 	var pending strings.Builder
+	space := false
 	flushP := func() {
 		s := strings.TrimSpace(pending.String())
 		pending.Reset()
+		space = false
 		if s != "" {
 			paras = append(paras, s)
 		}
@@ -38,14 +41,17 @@ func extractEPUBText(raw []byte, toc map[string]string) ([]book.Chapter, error) 
 			if pending.Len() == 0 && strings.TrimSpace(n.Data) == "" {
 				return
 			}
-			text := n.Data
-			if strings.TrimSpace(text) == "" {
-				if pending.Len() > 0 {
-					pending.WriteByte(' ')
+			for _, r := range n.Data {
+				if unicode.IsSpace(r) {
+					if pending.Len() > 0 && !space {
+						pending.WriteByte(' ')
+						space = true
+					}
+				} else {
+					pending.WriteRune(r)
+					space = false
 				}
-				return
 			}
-			pending.WriteString(strings.Join(strings.Fields(text), " "))
 			return
 		}
 		if n.Type == html.ElementNode {
@@ -68,6 +74,7 @@ func extractEPUBText(raw []byte, toc map[string]string) ([]book.Chapter, error) 
 			}
 			if n.Data == "br" {
 				pending.WriteByte('\n')
+				space = true
 				return
 			}
 			if strings.Contains(" p div section article blockquote li pre ", " "+n.Data+" ") {

@@ -170,9 +170,6 @@ func ParseEPUB(ctx context.Context, data []byte, title string) (book.Book, error
 		if !ok {
 			return book.Book{}, fmt.Errorf("EPUB spine 引用不存在")
 		}
-		if strings.Contains(" "+item.Properties+" ", " nav ") {
-			continue
-		}
 		p, _, er := resolve(opf, item.Href)
 		if er != nil {
 			return book.Book{}, er

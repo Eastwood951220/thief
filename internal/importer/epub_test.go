@@ -45,6 +45,24 @@ func TestEPUBPlainText(t *testing.T) {
 		}
 	}
 }
+
+func TestEPUBPreservesInlineWordBoundaries(t *testing.T) {
+	chapters, e := extractEPUBText([]byte(`<html><body><h1>Chapter 1</h1><p>Hello <em>dear</em> reader &amp; <span>friend</span>.</p><p>next <span> sentence</span></p></body></html>`), nil)
+	if e != nil || len(chapters) != 1 {
+		t.Fatal(chapters, e)
+	}
+	if chapters[0].Text != "Hello dear reader & friend.\n\nnext sentence" {
+		t.Fatalf("lost word spaces: %q", chapters[0].Text)
+	}
+}
+
+func TestEPUBNavSpineKeepsBodyOutsideNavigation(t *testing.T) {
+	data := epubFixture(map[string]string{"OEBPS/book.opf": `<package><manifest><item id="nav" href="nav.xhtml" properties="nav"/></manifest><spine><itemref idref="nav"/></spine></package>`, "OEBPS/nav.xhtml": `<html><body><nav epub:type="toc"><a href="#c">第一章</a></nav><h1 id="c">第一章</h1><p>实际正文。</p></body></html>`})
+	b, e := ParseEPUB(context.Background(), data, "book")
+	if e != nil || len(b.Chapters) != 1 || b.Chapters[0].Text != "实际正文。" {
+		t.Fatal(b, e)
+	}
+}
 func TestEPUBInvalid(t *testing.T) {
 	for _, data := range [][]byte{[]byte("invalid"), epubFixture(map[string]string{"OEBPS/a.xhtml": "<html><body><img src='x'/></body></html>", "OEBPS/b.xhtml": "<html><body><img src='x'/></body></html>"}), epubFixture(map[string]string{"../bad": "escape"}), epubFixture(map[string]string{"META-INF/encryption.xml": `<encryption><EncryptedData><CipherData><CipherReference URI="OEBPS/b.xhtml"/></CipherData></EncryptedData></encryption>`})} {
 		if _, e := ParseEPUB(context.Background(), data, "book"); e == nil {

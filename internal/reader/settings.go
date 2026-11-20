@@ -44,7 +44,10 @@ func (s Settings) Validate() error {
 	}
 	seen := map[Binding]bool{}
 	for _, b := range s.Hotkeys {
-		if b.Modifiers == 0 || b.KeyCode > 127 || seen[b] {
+		if b.Modifiers == 0 {
+			continue
+		}
+		if b.KeyCode > 127 || seen[b] {
 			return fmt.Errorf("快捷键无效或重复")
 		}
 		seen[b] = true

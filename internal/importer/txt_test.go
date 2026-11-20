@@ -72,3 +72,10 @@ func TestDecode(t *testing.T) {
 		t.Fatal("truncated GB accepted")
 	}
 }
+
+func TestDecodePreservesValidReplacementCharacter(t *testing.T) {
+	s, e := Decode([]byte("原文包含 � 字符"), "UTF-8")
+	if e != nil || s != "原文包含 � 字符" {
+		t.Fatal(s, e)
+	}
+}

@@ -36,7 +36,7 @@ func Decode(data []byte, encoding string) (string, error) {
 		if !utf8.Valid(data) {
 			return "", fmt.Errorf("无效 UTF-8，请选择文件编码")
 		}
-		out = data
+		return string(data), nil
 	case "UTF-16LE", "UTF-16BE":
 		if len(data)%2 != 0 {
 			return "", fmt.Errorf("UTF-16 数据不完整")

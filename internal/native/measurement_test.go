@@ -1,12 +1,22 @@
 package native
 
 import (
- "strings"
+	"strings"
 	"testing"
 	"thief/internal/reader"
 )
 
-func TestNativePageDoesNotIncludeClippedParagraph(t *testing.T){text:="\n山风穿过竹林，远处的灯火刚刚亮起。他把信折好，收进衣袋，沿着石阶慢慢向前走去。\n\n转过山口，一座小小的茶亭出现在路旁。炉上的水已经沸了，白汽消散在暮色里。\n\n老人放下茶碗，指了指山下的道路。";n,e:=(Measurer{}).Fit(text,reader.Layout{Width:315,Height:156,FontSize:16,LineSpacing:4});if e!=nil{t.Fatal(e)};boundary:=len([]rune(strings.Split(text,"老人")[0]));if n>boundary{t.Fatalf("included clipped third paragraph: end %d, boundary %d",n,boundary)}}
+func TestNativePageDoesNotIncludeClippedParagraph(t *testing.T) {
+	text := "\n山风穿过竹林，远处的灯火刚刚亮起。他把信折好，收进衣袋，沿着石阶慢慢向前走去。\n\n转过山口，一座小小的茶亭出现在路旁。炉上的水已经沸了，白汽消散在暮色里。\n\n老人放下茶碗，指了指山下的道路。"
+	n, e := (Measurer{}).Fit(text, reader.Layout{Width: 315, Height: 156, FontSize: 16, LineSpacing: 4})
+	if e != nil {
+		t.Fatal(e)
+	}
+	boundary := len([]rune(strings.Split(text, "老人")[0]))
+	if n > boundary {
+		t.Fatalf("included clipped third paragraph: end %d, boundary %d", n, boundary)
+	}
+}
 
 func TestNativeMeasurement(t *testing.T) {
 	m := Measurer{}

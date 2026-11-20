@@ -89,6 +89,19 @@ func TestUnicodePageBoundary(t *testing.T) {
 
 type zeroMeasure struct{}
 
+func TestPreviousAfterSwitchingLayoutUsesCurrentAnchor(t *testing.T) {
+	s, _ := New(testBook(), book.Position{}, fixedMeasure{5})
+	s.Next(Layout{Width: 5})
+	s.Next(Layout{Width: 3})
+	if s.Position().Offset != 8 {
+		t.Fatal(s.Position())
+	}
+	s.Previous(Layout{Width: 5})
+	if s.Position().Offset != 5 {
+		t.Fatalf("went to stale history: %+v", s.Position())
+	}
+}
+
 func (zeroMeasure) Fit(string, Layout) (int, error) { return 0, nil }
 func TestInvalidPosition(t *testing.T) {
 	s, e := New(testBook(), book.Position{ChapterID: "gone", Offset: 999}, fixedMeasure{5})

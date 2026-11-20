@@ -24,14 +24,15 @@ type Session struct {
 	Book            book.Book
 	chapter, offset int
 	measure         Measurer
-	history         map[Layout][]book.Position
+	history         map[Layout][]pageMove
 }
+type pageMove struct{ From, To book.Position }
 
 func New(b book.Book, p book.Position, m Measurer) (*Session, error) {
 	if len(b.Chapters) == 0 {
 		return nil, fmt.Errorf("没有可读章节")
 	}
-	s := &Session{Book: b, measure: m, history: map[Layout][]book.Position{}}
+	s := &Session{Book: b, measure: m, history: map[Layout][]pageMove{}}
 	for i, c := range b.Chapters {
 		if c.ID == p.ChapterID {
 			s.chapter = i
@@ -82,13 +83,13 @@ func (s *Session) Next(l Layout) error {
 		}
 	}
 	if old != s.Position() {
-		s.history[l] = append(s.history[l], old)
+		s.history[l] = append(s.history[l], pageMove{old, s.Position()})
 	}
 	return nil
 }
 func (s *Session) Previous(l Layout) error {
-	if h := s.history[l]; len(h) > 0 {
-		p := h[len(h)-1]
+	if h := s.history[l]; len(h) > 0 && h[len(h)-1].To == s.Position() {
+		p := h[len(h)-1].From
 		s.history[l] = h[:len(h)-1]
 		for i, c := range s.Book.Chapters {
 			if c.ID == p.ChapterID {
@@ -130,7 +131,7 @@ func (s *Session) Jump(id string) error {
 		if c.ID == id {
 			s.chapter = i
 			s.offset = 0
-			s.history = map[Layout][]book.Position{}
+			s.history = map[Layout][]pageMove{}
 			return nil
 		}
 	}

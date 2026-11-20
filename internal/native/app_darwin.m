@@ -12,6 +12,7 @@ NSButton *ThiefButton(NSString *title,id target,SEL action){NSButton *b=[NSButto
  NSMenuItem *edit=[NSMenuItem new];edit.title=@"编辑";NSMenu *editMenu=[NSMenu new];for(NSArray *pair in @[@[@"剪切",@"cut:",@"x"],@[@"复制",@"copy:",@"c"],@[@"粘贴",@"paste:",@"v"],@[@"全选",@"selectAll:",@"a"]]){[editMenu addItemWithTitle:pair[0] action:NSSelectorFromString(pair[1]) keyEquivalent:pair[2]];}edit.submenu=editMenu;[main addItem:edit];NSApp.mainMenu=main;
 }
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender{return NO;}
+- (BOOL)applicationShouldHandleReopen:(NSApplication *)sender hasVisibleWindows:(BOOL)flag{[self openManager:nil];return YES;}
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender{Emit(@"quit",@{});return NSTerminateCancel;}
 - (void)statusClick:(id)sender {NSMenu *menu=[self readingMenu];[menu popUpMenuPositioningItem:nil atLocation:NSMakePoint(0,-4) inView:self.status.button];}
 - (NSMenu *)readingMenu {NSMenu *menu=[NSMenu new];menu.delegate=self;NSArray *pairs=@[@[@"上一页",@"previous"],@[@"下一页",@"next"],@[@"上一章",@"previousChapter"],@[@"下一章",@"nextChapter"],@[@"章节列表…",@"openChapters"],@[@"隐藏 / 恢复正文",@"toggleHidden"],@[@"切换阅读模式",@"toggleMode"],@[@"打开书架与设置…",@"openShelf"],@[@"退出 thief",@"quit"]];for(NSArray *p in pairs){NSMenuItem *item=[[NSMenuItem alloc] initWithTitle:p[0] action:@selector(action:) keyEquivalent:@""];item.target=self;item.representedObject=p[1];[menu addItem:item];}return menu;}

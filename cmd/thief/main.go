@@ -25,6 +25,10 @@ func main() {
 	if e != nil {
 		log.Fatal(e)
 	}
+	if logfile, err := os.OpenFile(filepath.Join(root, "thief.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600); err == nil {
+		defer logfile.Close()
+		log.SetOutput(logfile)
+	}
 	controller, e := app.NewController(store, native.Measurer{})
 	if e != nil {
 		log.Fatal(e)
@@ -39,6 +43,7 @@ func main() {
 	events := make(chan native.Event, 256)
 	go func() {
 		for event := range events {
+			log.Printf("event %s", event.Kind)
 			var cmd app.Command
 			if e := json.Unmarshal([]byte(event.Payload), &cmd); e != nil {
 				log.Print(e)

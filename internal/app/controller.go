@@ -41,16 +41,20 @@ type Controller struct {
 	session                                      *reader.Session
 	hidden, collapsed, busy, interacting, closed bool
 	error, notice                                string
-	timer                                        *time.Timer
+	timer                                        stopper
+	after                                        func(time.Duration, func()) stopper
+	epoch                                        uint64
 	notify                                       func()
 	ctx                                          context.Context
 	cancel                                       context.CancelFunc
 }
+type stopper interface{ Stop() bool }
 
 func NewController(s *library.Store, m reader.Measurer) (*Controller, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	settings, e := s.LoadSettings()
 	c := &Controller{store: s, measure: m, settings: settings, hidden: true, ctx: ctx, cancel: cancel}
+	c.after = func(d time.Duration, fn func()) stopper { return time.AfterFunc(d, fn) }
 	if e != nil {
 		c.error = e.Error()
 	}
@@ -198,6 +202,7 @@ func (c *Controller) dispatch(cmd Command) error {
 		}
 		return c.save()
 	case "toggleHidden":
+		c.epoch++
 		if c.session == nil {
 			return fmt.Errorf("请先选择一本书")
 		}
@@ -244,6 +249,7 @@ func (c *Controller) dispatch(cmd Command) error {
 		}
 		c.settings = next
 	case "hoverEnter":
+		c.epoch++
 		if c.timer != nil {
 			c.timer.Stop()
 		}
@@ -253,6 +259,7 @@ func (c *Controller) dispatch(cmd Command) error {
 	case "hoverLeave":
 		c.scheduleCollapse()
 	case "interactionBegin":
+		c.epoch++
 		c.interacting = true
 		if c.timer != nil {
 			c.timer.Stop()
@@ -271,9 +278,11 @@ func (c *Controller) scheduleCollapse() {
 	if c.timer != nil {
 		c.timer.Stop()
 	}
-	c.timer = time.AfterFunc(time.Duration(c.settings.CollapseDelayMS)*time.Millisecond, func() {
+	c.epoch++
+	epoch := c.epoch
+	c.timer = c.after(time.Duration(c.settings.CollapseDelayMS)*time.Millisecond, func() {
 		c.mu.Lock()
-		if !c.hidden && !c.interacting && !c.closed && c.settings.AutoCollapse {
+		if c.epoch == epoch && !c.hidden && !c.interacting && !c.closed && c.settings.AutoCollapse {
 			c.collapsed = true
 		}
 		c.mu.Unlock()

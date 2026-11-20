@@ -1,11 +1,86 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"thief/internal/book"
 	"thief/internal/library"
 	"thief/internal/reader"
+	"time"
 )
+
+func TestImportCompletionDoesNotSwitchBook(t *testing.T) {
+	s, _ := library.Open(t.TempDir())
+	s.Import(book.Book{ID: "existing", Title: "已在读", Chapters: []book.Chapter{{ID: "c", Text: "甲乙丙丁戊己"}}})
+	c, _ := NewController(s, measure{})
+	c.Dispatch(Command{Kind: "continue", BookID: "existing"})
+	c.Dispatch(Command{Kind: "next"})
+	p := filepath.Join(t.TempDir(), "new.txt")
+	os.WriteFile(p, []byte("第一章 初见\n正文。"), 0600)
+	changed := make(chan struct{}, 10)
+	c.SetNotify(func() {
+		select {
+		case changed <- struct{}{}:
+		default:
+		}
+	})
+	if e := c.Dispatch(Command{Kind: "import", Path: p}); e != nil {
+		t.Fatal(e)
+	}
+	deadline := time.After(3 * time.Second)
+	for c.Snapshot().Busy {
+		select {
+		case <-changed:
+		case <-deadline:
+			t.Fatal("import timed out")
+		}
+	}
+	got := c.Snapshot()
+	if got.BookID != "existing" || got.Page.Start != 3 || len(got.Books) != 2 {
+		t.Fatal(got)
+	}
+}
+
+func TestCollapseInteraction(t *testing.T) {
+	s, _ := library.Open(t.TempDir())
+	s.Import(book.Book{ID: "book", Chapters: []book.Chapter{{ID: "c", Text: "甲乙丙丁"}}})
+	c, _ := NewController(s, measure{})
+	var fire func()
+	var delay time.Duration
+	c.after = func(d time.Duration, fn func()) stopper { delay = d; fire = fn; return &fakeTimer{} }
+	c.Dispatch(Command{Kind: "continue", BookID: "book"})
+	c.Dispatch(Command{Kind: "toggleMode"})
+	c.Dispatch(Command{Kind: "hoverLeave"})
+	if delay != 400*time.Millisecond || c.Snapshot().Collapsed {
+		t.Fatal("incorrect delay")
+	}
+	c.Dispatch(Command{Kind: "interactionBegin"})
+	fire()
+	if c.Snapshot().Collapsed {
+		t.Fatal("collapsed during menu or drag")
+	}
+	c.Dispatch(Command{Kind: "interactionEnd"})
+	c.Dispatch(Command{Kind: "hoverLeave"})
+	fire()
+	if !c.Snapshot().Collapsed {
+		t.Fatal("not collapsed")
+	}
+	c.Dispatch(Command{Kind: "hoverEnter"})
+	if c.Snapshot().Collapsed {
+		t.Fatal("did not restore")
+	}
+	c.Dispatch(Command{Kind: "toggleHidden"})
+	fire()
+	c.Dispatch(Command{Kind: "hoverEnter"})
+	if !c.Snapshot().Hidden || c.Snapshot().Collapsed {
+		t.Fatal("hidden restored")
+	}
+}
+
+type fakeTimer struct{}
+
+func (*fakeTimer) Stop() bool { return true }
 
 type measure struct{}
 

@@ -15,6 +15,8 @@ NSButton *ThiefButton(NSString *title,id target,SEL action);
 @property(nonatomic,strong) NSTableView *shelfTable;
 @property(nonatomic,strong) NSTextField *bookSearch;
 @property(nonatomic,strong) NSTextField *message;
+@property(nonatomic,strong) NSTextField *modeHint;
+@property(nonatomic,strong) NSButton *modeButton;
 @property(nonatomic,strong) NSArray *filteredBooks;
 @property(nonatomic,strong) NSWindow *chapterWindow;
 @property(nonatomic,strong) NSTableView *chapterTable;
@@ -54,6 +56,7 @@ NSButton *ThiefButton(NSString *title,id target,SEL action);
 @end
 @interface ThiefApp (Reader)
 - (void)buildReader;
+- (void)readerAction:(NSControl *)sender;
 - (void)refreshReader;
 - (void)syncFrame;
 @end

@@ -50,7 +50,6 @@ func TestCollapseInteraction(t *testing.T) {
 	var delay time.Duration
 	c.after = func(d time.Duration, fn func()) stopper { delay = d; fire = fn; return &fakeTimer{} }
 	c.Dispatch(Command{Kind: "continue", BookID: "book"})
-	c.Dispatch(Command{Kind: "toggleMode"})
 	c.Dispatch(Command{Kind: "hoverLeave"})
 	if delay != 400*time.Millisecond || c.Snapshot().Collapsed {
 		t.Fatal("incorrect delay")

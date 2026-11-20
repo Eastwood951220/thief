@@ -19,7 +19,7 @@ type Settings struct {
 }
 
 func DefaultSettings() Settings {
-	return Settings{Mode: "menu", Frame: Rect{100, 100, 355, 236}, BackgroundColor: "#F5F3EB", TextColor: "#343B43", BackgroundTransparency: 14, FontSize: 16, LineSpacing: 4, MenuWidth: 320, MenuFontSize: 13, AutoCollapse: true, CollapseDelayMS: 400, Hotkeys: map[string]Binding{"previous": {123, 6144}, "next": {124, 6144}, "previousChapter": {126, 6144}, "nextChapter": {125, 6144}, "toggleHidden": {4, 6144}, "toggleMode": {46, 6144}}}
+	return Settings{Mode: "float", Frame: Rect{100, 100, 355, 236}, BackgroundColor: "#F5F3EB", TextColor: "#343B43", BackgroundTransparency: 14, FontSize: 16, LineSpacing: 4, MenuWidth: 320, MenuFontSize: 13, AutoCollapse: true, CollapseDelayMS: 400, Hotkeys: map[string]Binding{"previous": {123, 6144}, "next": {124, 6144}, "previousChapter": {126, 6144}, "nextChapter": {125, 6144}, "toggleHidden": {4, 6144}, "toggleMode": {46, 6144}}}
 }
 
 var hexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)

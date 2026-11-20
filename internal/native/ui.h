@@ -35,15 +35,22 @@ NSButton *ThiefButton(NSString *title,id target,SEL action);
 @property(nonatomic,assign) BOOL applying;
 @property(nonatomic,assign) BOOL moving;
 @property(nonatomic,assign) BOOL interacting;
+@property(nonatomic,assign) BOOL chapterInteraction;
+@property(nonatomic,assign) uint64_t displayedRevision;
+@property(nonatomic,assign) uint64_t handledReadAction;
+@property(nonatomic,assign) uint64_t handledRequest;
+@property(nonatomic,copy) NSDictionary *lastHotkeyAttempt;
+@property(nonatomic,copy) NSString *hotkeyError;
 - (void)applySnapshot:(NSDictionary *)snapshot;
 - (void)action:(id)sender;
 - (NSMenu *)readingMenu;
 - (void)openManager:(id)sender;
 @end
-@interface ThiefApp (Manager) <NSTableViewDataSource,NSTableViewDelegate,NSTextFieldDelegate>
+@interface ThiefApp (Manager) <NSTableViewDataSource,NSTableViewDelegate,NSTextFieldDelegate,NSWindowDelegate>
 - (void)buildManager;
 - (void)refreshManager;
 - (void)showChapters:(NSDictionary *)payload;
+- (void)endChapterInteraction;
 @end
 @interface ThiefApp (Reader)
 - (void)buildReader;
@@ -51,5 +58,6 @@ NSButton *ThiefButton(NSString *title,id target,SEL action);
 - (void)syncFrame;
 @end
 @interface ThiefApp (Hotkeys)
-- (void)registerHotkeys:(NSDictionary *)bindings;
+- (BOOL)registerHotkeys:(NSDictionary *)bindings atomic:(BOOL)atomic;
+- (void)configureHotkeys;
 @end

@@ -17,13 +17,19 @@ func main() {
 	if root == "" {
 		home, e := os.UserHomeDir()
 		if e != nil {
-			log.Fatal(e)
+			native.Failure(e.Error())
+			return
 		}
 		root = filepath.Join(home, "Library", "Application Support", "thief")
 	}
 	store, e := library.Open(root)
 	if e != nil {
-		log.Fatal(e)
+		native.Failure(e.Error())
+		return
+	}
+	defer store.Close()
+	if info, err := os.Stat(filepath.Join(root, "thief.log")); err == nil && info.Size() > 1<<20 {
+		os.Rename(filepath.Join(root, "thief.log"), filepath.Join(root, "thief.previous.log"))
 	}
 	if logfile, err := os.OpenFile(filepath.Join(root, "thief.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600); err == nil {
 		defer logfile.Close()
@@ -31,7 +37,8 @@ func main() {
 	}
 	controller, e := app.NewController(store, native.Measurer{})
 	if e != nil {
-		log.Fatal(e)
+		native.Failure(e.Error())
+		return
 	}
 	publish := func() {
 		data, e := json.Marshal(controller.Snapshot())
@@ -43,7 +50,6 @@ func main() {
 	events := make(chan native.Event, 256)
 	go func() {
 		for event := range events {
-			log.Printf("event %s", event.Kind)
 			var cmd app.Command
 			if e := json.Unmarshal([]byte(event.Payload), &cmd); e != nil {
 				log.Print(e)
@@ -57,7 +63,12 @@ func main() {
 			case "quit":
 				if e := controller.Close(); e != nil {
 					log.Printf("保存阅读位置失败: %v", e)
+					native.QuitError(e.Error())
+					continue
 				}
+				native.Quit()
+				return
+			case "forceQuit":
 				native.Quit()
 				return
 			case "chapters":

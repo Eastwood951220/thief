@@ -17,6 +17,7 @@ type Command struct {
 	Options                              importer.Options
 	Settings                             *reader.Settings
 	Frame                                *reader.Rect
+	RequestID                            uint64
 }
 type ChapterRow struct {
 	ID, Title, Volume string
@@ -24,29 +25,34 @@ type ChapterRow struct {
 	Current           bool
 }
 type Snapshot struct {
-	Books                   []book.Metadata
-	Settings                reader.Settings
-	Page                    reader.Page
-	BookID, BookTitle       string
-	Hidden, Collapsed, Busy bool
-	Error, Notice           string
-	Chapters                []ChapterRow
-	HotkeyStatus            map[string]string
+	Books                           []book.Metadata
+	Settings                        reader.Settings
+	Page                            reader.Page
+	BookID, BookTitle               string
+	Hidden, Collapsed, Busy         bool
+	Error, Notice                   string
+	Chapters                        []ChapterRow
+	HotkeyStatus                    map[string]string
+	Revision, RequestID, ReadAction uint64
+	PendingSettings                 *reader.Settings
 }
 type Controller struct {
-	mu                                           sync.Mutex
-	store                                        *library.Store
-	measure                                      reader.Measurer
-	settings                                     reader.Settings
-	session                                      *reader.Session
-	hidden, collapsed, busy, interacting, closed bool
-	error, notice                                string
-	timer                                        stopper
-	after                                        func(time.Duration, func()) stopper
-	epoch                                        uint64
-	notify                                       func()
-	ctx                                          context.Context
-	cancel                                       context.CancelFunc
+	mu                              sync.Mutex
+	store                           *library.Store
+	measure                         reader.Measurer
+	settings                        reader.Settings
+	session                         *reader.Session
+	hidden, collapsed, busy, closed bool
+	interactions                    int
+	error, notice                   string
+	timer                           stopper
+	after                           func(time.Duration, func()) stopper
+	epoch                           uint64
+	revision, requestID, readAction uint64
+	pendingSettings                 *reader.Settings
+	notify                          func()
+	ctx                             context.Context
+	cancel                          context.CancelFunc
 }
 type stopper interface{ Stop() bool }
 
@@ -105,6 +111,7 @@ func (c *Controller) save() error {
 func (c *Controller) Dispatch(cmd Command) error {
 	c.mu.Lock()
 	e := c.dispatch(cmd)
+	c.revision++
 	if e != nil {
 		c.error = e.Error()
 	}
@@ -149,11 +156,16 @@ func (c *Controller) dispatch(cmd Command) error {
 				c.error = e.Error()
 			}
 			c.busy = false
+			c.revision++
 			c.mu.Unlock()
 			c.changed()
 		}()
 		return nil
 	case "continue", "jump":
+		c.epoch++
+		if c.timer != nil {
+			c.timer.Stop()
+		}
 		if e := c.save(); e != nil {
 			return e
 		}
@@ -172,7 +184,11 @@ func (c *Controller) dispatch(cmd Command) error {
 		}
 		c.hidden = false
 		c.collapsed = false
-		return c.save()
+		if e := c.save(); e != nil {
+			return e
+		}
+		c.readAction++
+		return nil
 	case "remove":
 		if e := c.store.Remove(cmd.BookID); e != nil {
 			return e
@@ -212,28 +228,43 @@ func (c *Controller) dispatch(cmd Command) error {
 			c.timer.Stop()
 		}
 	case "toggleMode":
+		c.epoch++
+		c.pendingSettings = nil
+		c.requestID++
 		if c.settings.Mode == "menu" {
 			c.settings.Mode = "float"
 		} else {
 			c.settings.Mode = "menu"
 		}
 		return c.store.SaveSettings(c.settings)
-	case "saveSettings", "hotkeyRollback":
+	case "saveSettings":
 		if cmd.Settings == nil {
 			return fmt.Errorf("缺少设置")
 		}
 		if e := cmd.Settings.Validate(); e != nil {
 			return e
 		}
-		if e := c.store.SaveSettings(*cmd.Settings); e != nil {
+		c.requestID++
+		copy := *cmd.Settings
+		c.pendingSettings = &copy
+	case "settingsAccepted":
+		if c.pendingSettings == nil || cmd.RequestID != c.requestID {
+			return nil
+		}
+		next := *c.pendingSettings
+		c.pendingSettings = nil
+		if e := c.store.SaveSettings(next); e != nil {
 			return e
 		}
-		c.settings = *cmd.Settings
-		if cmd.Kind == "hotkeyRollback" {
-			c.error = cmd.Query
-		}
-		if !c.settings.AutoCollapse {
+		c.settings = next
+		c.epoch++
+		if !next.AutoCollapse {
 			c.collapsed = false
+		}
+	case "settingsRejected":
+		if c.pendingSettings != nil && cmd.RequestID == c.requestID {
+			c.pendingSettings = nil
+			c.error = cmd.Query
 		}
 	case "setFrame":
 		if cmd.Frame == nil {
@@ -260,12 +291,14 @@ func (c *Controller) dispatch(cmd Command) error {
 		c.scheduleCollapse()
 	case "interactionBegin":
 		c.epoch++
-		c.interacting = true
+		c.interactions++
 		if c.timer != nil {
 			c.timer.Stop()
 		}
 	case "interactionEnd":
-		c.interacting = false
+		if c.interactions > 0 {
+			c.interactions--
+		}
 	case "clearError":
 		c.error = ""
 	case "reportError":
@@ -274,7 +307,7 @@ func (c *Controller) dispatch(cmd Command) error {
 	return nil
 }
 func (c *Controller) scheduleCollapse() {
-	if c.hidden || !c.settings.AutoCollapse || c.interacting || c.settings.Mode != "float" {
+	if c.hidden || !c.settings.AutoCollapse || c.interactions > 0 || c.settings.Mode != "float" {
 		return
 	}
 	if c.timer != nil {
@@ -284,8 +317,9 @@ func (c *Controller) scheduleCollapse() {
 	epoch := c.epoch
 	c.timer = c.after(time.Duration(c.settings.CollapseDelayMS)*time.Millisecond, func() {
 		c.mu.Lock()
-		if c.epoch == epoch && !c.hidden && !c.interacting && !c.closed && c.settings.AutoCollapse {
+		if c.epoch == epoch && !c.hidden && c.interactions == 0 && !c.closed && c.settings.AutoCollapse && c.settings.Mode == "float" {
 			c.collapsed = true
+			c.revision++
 		}
 		c.mu.Unlock()
 		c.changed()
@@ -295,7 +329,7 @@ func (c *Controller) Snapshot() Snapshot {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	books, e := c.store.List()
-	s := Snapshot{Books: books, Settings: c.settings, Hidden: c.hidden, Collapsed: c.collapsed, Busy: c.busy, Error: c.error, Notice: c.notice}
+	s := Snapshot{Books: books, Settings: c.settings, Hidden: c.hidden, Collapsed: c.collapsed, Busy: c.busy, Error: c.error, Notice: c.notice, Revision: c.revision, RequestID: c.requestID, ReadAction: c.readAction, PendingSettings: c.pendingSettings}
 	if e != nil {
 		s.Error = e.Error()
 	}
@@ -329,10 +363,13 @@ func (c *Controller) Chapters(id, query string) ([]ChapterRow, error) {
 func (c *Controller) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if e := c.save(); e != nil {
+		return e
+	}
 	c.closed = true
 	c.cancel()
 	if c.timer != nil {
 		c.timer.Stop()
 	}
-	return c.save()
+	return nil
 }

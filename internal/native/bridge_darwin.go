@@ -25,7 +25,7 @@ type Measurer struct{}
 func (Measurer) Fit(text string, l reader.Layout) (int, error) {
 	p := C.CString(text)
 	defer C.free(unsafe.Pointer(p))
-	n := int(C.thief_fit(p, C.double(l.Width), C.double(l.Height), C.double(l.FontSize), C.double(l.LineSpacing), C.int(boolInt(l.SingleLine))))
+	n := int(C.thief_fit(p, C.long(len(text)), C.double(l.Width), C.double(l.Height), C.double(l.FontSize), C.double(l.LineSpacing), C.int(boolInt(l.SingleLine))))
 	if n < 0 {
 		return 0, fmt.Errorf("文字测量失败")
 	}
@@ -59,6 +59,16 @@ func Chapters(json string) {
 	C.thief_chapters(p)
 }
 func Quit() { C.thief_quit() }
+func Failure(message string) {
+	p := C.CString(message)
+	defer C.free(unsafe.Pointer(p))
+	C.thief_failure(p)
+}
+func QuitError(message string) {
+	p := C.CString(message)
+	defer C.free(unsafe.Pointer(p))
+	C.thief_quit_error(p)
+}
 
 //export thief_event
 func thief_event(kind, payload *C.char) {

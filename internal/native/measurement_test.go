@@ -34,3 +34,10 @@ func TestNativeMeasurement(t *testing.T) {
 		t.Fatal("split composed character", n)
 	}
 }
+
+func TestNativeMeasurementPreservesEmbeddedNUL(t *testing.T) {
+	n, e := (Measurer{}).Fit("甲\x00乙", reader.Layout{Width: 400, Height: 100, FontSize: 16})
+	if e != nil || n != 3 {
+		t.Fatalf("truncated at NUL: %d %v", n, e)
+	}
+}

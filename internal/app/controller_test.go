@@ -82,6 +82,44 @@ type fakeTimer struct{}
 
 func (*fakeTimer) Stop() bool { return true }
 
+func TestHotkeyReplacementRollback(t *testing.T) {
+	s, _ := library.Open(t.TempDir())
+	c, _ := NewController(s, measure{})
+	original := c.Snapshot()
+	settings := original.Settings
+	settings.Hotkeys = map[string]reader.Binding{}
+	for k, v := range original.Settings.Hotkeys {
+		settings.Hotkeys[k] = v
+	}
+	settings.Hotkeys["next"] = reader.Binding{KeyCode: 38, Modifiers: 6144}
+	if e := c.Dispatch(Command{Kind: "saveSettings", Settings: &settings}); e != nil {
+		t.Fatal(e)
+	}
+	pending := c.Snapshot()
+	stored, _ := s.LoadSettings()
+	if stored.Hotkeys["next"].KeyCode != 124 || pending.PendingSettings == nil || pending.RequestID == 0 {
+		t.Fatal("saved before registration", pending)
+	}
+	c.Dispatch(Command{Kind: "settingsRejected", RequestID: pending.RequestID, Query: "快捷键已占用"})
+	if c.Snapshot().Settings.Hotkeys["next"].KeyCode != 124 {
+		t.Fatal("old binding lost")
+	}
+	c.Dispatch(Command{Kind: "saveSettings", Settings: &settings})
+	newer := c.Snapshot()
+	c.Dispatch(Command{Kind: "settingsAccepted", RequestID: pending.RequestID})
+	if c.Snapshot().PendingSettings == nil {
+		t.Fatal("stale confirmation accepted")
+	}
+	c.Dispatch(Command{Kind: "settingsAccepted", RequestID: newer.RequestID})
+	stored, _ = s.LoadSettings()
+	if stored.Hotkeys["next"].KeyCode != 38 {
+		t.Fatal("success not persisted")
+	}
+	if c.Snapshot().Revision <= original.Revision {
+		t.Fatal("snapshot ordering missing")
+	}
+}
+
 type measure struct{}
 
 func (measure) Fit(text string, l reader.Layout) (int, error) {

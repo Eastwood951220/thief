@@ -1,8 +1,8 @@
 #import <AppKit/AppKit.h>
 #import <CoreText/CoreText.h>
 #import "bridge.h"
-long thief_fit(const char *utf8,double width,double height,double font,double spacing,int single){@autoreleasepool{
- NSString *text=[[NSString alloc] initWithUTF8String:utf8];if(!text||width<=0||height<=0)return 0;
+long thief_fit(const char *utf8,long length,double width,double height,double font,double spacing,int single){@autoreleasepool{
+ NSString *text=[[NSString alloc] initWithBytes:utf8 length:length encoding:NSUTF8StringEncoding];if(!text||width<=0||height<=0)return 0;
  if(single)text=[text stringByReplacingOccurrencesOfString:@"\n" withString:@" "];
  NSMutableParagraphStyle *style=[NSMutableParagraphStyle new];style.lineSpacing=spacing;
  NSAttributedString *a=[[NSAttributedString alloc] initWithString:text attributes:@{NSFontAttributeName:[NSFont systemFontOfSize:font],NSParagraphStyleAttributeName:style}];

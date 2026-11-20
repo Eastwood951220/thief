@@ -1,18 +1,30 @@
-#import <AppKit/AppKit.h>
-#import "bridge.h"
-
-@interface ThiefApp : NSObject <NSApplicationDelegate>
-@property(nonatomic,strong) NSStatusItem *status;
-@end
+#import "ui.h"
+ThiefApp *Thief;
+void Emit(NSString *kind,NSDictionary *payload){NSData *data=[NSJSONSerialization dataWithJSONObject:payload?:@{} options:0 error:NULL];NSString *json=[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];thief_event((char *)kind.UTF8String,(char *)json.UTF8String);}
+NSColor *HexColor(NSString *hex,double transparency){unsigned value=0;NSScanner *scan=[NSScanner scannerWithString:[hex stringByReplacingOccurrencesOfString:@"#" withString:@""]?:@"000000"];[scan scanHexInt:&value];return [NSColor colorWithSRGBRed:((value>>16)&255)/255.0 green:((value>>8)&255)/255.0 blue:(value&255)/255.0 alpha:1-transparency/100.0];}
+NSTextField *Label(NSString *text,CGFloat size){NSTextField *l=[NSTextField labelWithString:text?:@""];l.font=[NSFont systemFontOfSize:size];return l;}
+NSButton *ThiefButton(NSString *title,id target,SEL action){NSButton *b=[NSButton buttonWithTitle:title target:target action:action];b.bezelStyle=NSBezelStyleRounded;return b;}
 @implementation ThiefApp
 - (void)applicationDidFinishLaunching:(NSNotification *)note {
- self.status=[[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
- self.status.button.title=@"≡";
- NSMenu *menu=[NSMenu new];
- [menu addItemWithTitle:@"退出 thief" action:@selector(terminate:) keyEquivalent:@"q"];
- self.status.menu=menu;
+ self.status=[[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];self.status.button.title=@"≡";self.status.button.target=self;self.status.button.action=@selector(statusClick:);[self.status.button sendActionOn:NSEventMaskLeftMouseUp|NSEventMaskRightMouseUp];
+ [self buildManager];[self buildReader];[self openManager:nil];Emit(@"started",@{});
+ NSMenu *main=[NSMenu new];NSMenuItem *root=[NSMenuItem new];NSMenu *appMenu=[NSMenu new];NSMenuItem *quit=[[NSMenuItem alloc] initWithTitle:@"退出 thief" action:@selector(action:) keyEquivalent:@"q"];quit.target=self;quit.representedObject=@"quit";[appMenu addItem:quit];root.submenu=appMenu;[main addItem:root];
+ NSMenuItem *edit=[NSMenuItem new];edit.title=@"编辑";NSMenu *editMenu=[NSMenu new];for(NSArray *pair in @[@[@"剪切",@"cut:",@"x"],@[@"复制",@"copy:",@"c"],@[@"粘贴",@"paste:",@"v"],@[@"全选",@"selectAll:",@"a"]]){[editMenu addItemWithTitle:pair[0] action:NSSelectorFromString(pair[1]) keyEquivalent:pair[2]];}edit.submenu=editMenu;[main addItem:edit];NSApp.mainMenu=main;
 }
+- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender{return NO;}
+- (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender{Emit(@"quit",@{});return NSTerminateCancel;}
+- (void)statusClick:(id)sender {NSMenu *menu=[self readingMenu];[menu popUpMenuPositioningItem:nil atLocation:NSMakePoint(0,-4) inView:self.status.button];}
+- (NSMenu *)readingMenu {NSMenu *menu=[NSMenu new];menu.delegate=self;NSArray *pairs=@[@[@"上一页",@"previous"],@[@"下一页",@"next"],@[@"上一章",@"previousChapter"],@[@"下一章",@"nextChapter"],@[@"章节列表…",@"openChapters"],@[@"隐藏 / 恢复正文",@"toggleHidden"],@[@"切换阅读模式",@"toggleMode"],@[@"打开书架与设置…",@"openShelf"],@[@"退出 thief",@"quit"]];for(NSArray *p in pairs){NSMenuItem *item=[[NSMenuItem alloc] initWithTitle:p[0] action:@selector(action:) keyEquivalent:@""];item.target=self;item.representedObject=p[1];[menu addItem:item];}return menu;}
+- (void)action:(id)sender {NSString *kind=[sender representedObject];if([kind isEqual:@"openShelf"]){[self openManager:nil];return;}if([kind isEqual:@"openChapters"]){NSString *id=self.snapshot[@"BookID"];if(id.length)Emit(@"chapters",@{@"BookID":id});else [self openManager:nil];return;}Emit(kind?:@"",@{});}
+- (void)menuWillOpen:(NSMenu *)menu {self.interacting=YES;Emit(@"interactionBegin",@{});}
+- (void)menuDidClose:(NSMenu *)menu {self.interacting=NO;Emit(@"interactionEnd",@{});if(self.panel.visible&&!NSPointInRect(NSEvent.mouseLocation,self.panel.frame))Emit(@"hoverLeave",@{});}
+- (void)applySnapshot:(NSDictionary *)snapshot {self.applying=YES;self.snapshot=snapshot;NSDictionary *settings=snapshot[@"Settings"],*page=snapshot[@"Page"];BOOL shown=![snapshot[@"Hidden"] boolValue]&&[snapshot[@"BookID"] length]>0;
+ if(shown&&[settings[@"Mode"] isEqual:@"menu"]){NSString *text=[page[@"Text"] stringByReplacingOccurrencesOfString:@"\n" withString:@" "]?:@"";self.status.length=[settings[@"MenuWidth"] doubleValue];self.status.button.font=[NSFont systemFontOfSize:[settings[@"MenuFontSize"] doubleValue]];self.status.button.title=text.length?text:@"≡";}else{self.status.length=NSVariableStatusItemLength;self.status.button.title=@"≡";}self.status.button.toolTip=shown?snapshot[@"BookTitle"]:@"thief · 打开书架";
+ [self refreshReader];[self refreshManager];[self registerHotkeys:settings[@"Hotkeys"]];self.applying=NO;
+}
+- (void)openManager:(id)sender{NSRunningApplication *front=NSWorkspace.sharedWorkspace.frontmostApplication;if(front.processIdentifier!=NSProcessInfo.processInfo.processIdentifier)self.previousApp=front;[NSApp activateIgnoringOtherApps:YES];[self.manager makeKeyAndOrderFront:nil];}
 @end
-static ThiefApp *delegate;
-void thief_run(void) { @autoreleasepool { [NSApplication sharedApplication]; delegate=[ThiefApp new]; NSApp.delegate=delegate; [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory]; [NSApp run]; } }
-void thief_apply(const char *json) { NSString *copy=[[NSString alloc] initWithUTF8String:json]; dispatch_async(dispatch_get_main_queue(), ^{ (void)copy; }); }
+void thief_run(void){@autoreleasepool{[NSApplication sharedApplication];Thief=[ThiefApp new];NSApp.delegate=Thief;[NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];[NSApp run];}}
+void thief_apply(const char *json){NSString *copy=[[NSString alloc] initWithUTF8String:json];dispatch_async(dispatch_get_main_queue(),^{NSDictionary *s=[NSJSONSerialization JSONObjectWithData:[copy dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL];if(s)[Thief applySnapshot:s];});}
+void thief_chapters(const char *json){NSString *copy=[[NSString alloc] initWithUTF8String:json];dispatch_async(dispatch_get_main_queue(),^{NSDictionary *s=[NSJSONSerialization JSONObjectWithData:[copy dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL];if(s)[Thief showChapters:s];});}
+void thief_quit(void){dispatch_async(dispatch_get_main_queue(),^{for(NSValue *v in Thief.hotkeyRefs.allValues){UnregisterEventHotKey(v.pointerValue);}[NSApp stop:nil];[NSApp abortModal];});}

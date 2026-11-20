@@ -2,6 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export PATH="/opt/homebrew/bin:/usr/local/go/bin:$PATH"
+export MACOSX_DEPLOYMENT_TARGET=13.0
 arch="${ARCH:-$(go env GOARCH)}"
 out="dist/$arch/thief.app"
 mkdir -p "$out/Contents/MacOS" "$out/Contents/Resources"

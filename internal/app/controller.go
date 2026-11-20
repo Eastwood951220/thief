@@ -213,7 +213,7 @@ func (c *Controller) dispatch(cmd Command) error {
 			c.settings.Mode = "menu"
 		}
 		return c.store.SaveSettings(c.settings)
-	case "saveSettings":
+	case "saveSettings", "hotkeyRollback":
 		if cmd.Settings == nil {
 			return fmt.Errorf("缺少设置")
 		}
@@ -224,6 +224,9 @@ func (c *Controller) dispatch(cmd Command) error {
 			return e
 		}
 		c.settings = *cmd.Settings
+		if cmd.Kind == "hotkeyRollback" {
+			c.error = cmd.Query
+		}
 		if !c.settings.AutoCollapse {
 			c.collapsed = false
 		}

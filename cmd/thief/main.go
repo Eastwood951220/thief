@@ -47,6 +47,7 @@ func main() {
 			var cmd app.Command
 			if e := json.Unmarshal([]byte(event.Payload), &cmd); e != nil {
 				log.Print(e)
+				controller.Dispatch(app.Command{Kind: "reportError", Query: "设置或操作数据格式无效，请检查输入"})
 				continue
 			}
 			cmd.Kind = event.Kind

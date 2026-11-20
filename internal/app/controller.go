@@ -268,6 +268,8 @@ func (c *Controller) dispatch(cmd Command) error {
 		c.interacting = false
 	case "clearError":
 		c.error = ""
+	case "reportError":
+		c.error = cmd.Query
 	}
 	return nil
 }

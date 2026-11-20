@@ -8,7 +8,7 @@ long thief_fit(const char *utf8,double width,double height,double font,double sp
  NSAttributedString *a=[[NSAttributedString alloc] initWithString:text attributes:@{NSFontAttributeName:[NSFont systemFontOfSize:font],NSParagraphStyleAttributeName:style}];
  CFIndex end=0;
  if(single){CTTypesetterRef t=CTTypesetterCreateWithAttributedString((__bridge CFAttributedStringRef)a);end=CTTypesetterSuggestClusterBreak(t,0,width);CFRelease(t);}
- else {CTFramesetterRef fs=CTFramesetterCreateWithAttributedString((__bridge CFAttributedStringRef)a);CGPathRef path=CGPathCreateWithRect(CGRectMake(0,0,width,height),NULL);CTFrameRef frame=CTFramesetterCreateFrame(fs,CFRangeMake(0,0),path,NULL);end=CTFrameGetVisibleStringRange(frame).length;CFRelease(frame);CGPathRelease(path);CFRelease(fs);}
+ else {NSTextStorage *storage=[[NSTextStorage alloc] initWithAttributedString:a];NSLayoutManager *layout=[NSLayoutManager new];NSTextContainer *container=[[NSTextContainer alloc] initWithContainerSize:NSMakeSize(width,height)];container.lineFragmentPadding=0;[layout addTextContainer:container];[storage addLayoutManager:layout];NSRange glyphs=[layout glyphRangeForTextContainer:container];__block NSUInteger visible=0;[layout enumerateLineFragmentsForGlyphRange:glyphs usingBlock:^(NSRect rect,NSRect used,NSTextContainer *c,NSRange range,BOOL *stop){if(NSMaxY(used)>height+.01){*stop=YES;return;}visible=NSMaxRange(range);}];end=NSMaxRange([layout characterRangeForGlyphRange:NSMakeRange(0,visible) actualGlyphRange:NULL]);}
  if(end>0&&end<text.length){NSRange r=[text rangeOfComposedCharacterSequenceAtIndex:end];if(r.location<end)end=r.location;}
  return end;
 }}
